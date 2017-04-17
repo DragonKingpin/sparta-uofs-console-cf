@@ -1,2 +1,2 @@
-# sparta-uofs-console-cf
-Sparta 中台 UOFS 统一对象文件系统 / 对象存储 前端仓库
+这是一个vue+element+axios+webpack2的管理后台 先占个坑
+效果预览
