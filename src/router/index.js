@@ -8,6 +8,10 @@ Vue.use(Router)
 /* layout */
 import Layout from '../views/layout/Layout'
 
+/** note: submenu only apppear when children.length>=1
+*   detail see  https://panjiachen.github.io/vue-element-admin-site/#/router-and-nav?id=sidebar
+**/
+
 /**
 * icon : the icon show in the sidebar
 * hidden : if `hidden:true` will not show in the sidebar
