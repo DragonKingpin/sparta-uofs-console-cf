@@ -98,6 +98,7 @@
             >
             <!-- 如果是文件夹，展示文件夹图标 -->
             <i v-else-if="item.metaType === 'Folder'" class="el-icon-folder" />
+            <i v-else-if="item.metaType === 'ExternalSymbolic'" class="el-icon-folder" />
             <!-- 如果是视频文件，展示视频图标 -->
             <i v-else-if="['mp4', 'avi', 'mov', 'mkv'].includes(getFileType(item.name))" class="el-icon-video-camera" />
             <!-- 如果是音频文件，展示音频图标 -->
@@ -569,6 +570,10 @@ export default {
         this.currentPath.push(item) // 添加到路径
         this.loadFolderContent(item)
         this.expandTree(item)
+      } else if (item.metaType === 'ExternalSymbolic') {
+        this.currentPath.push(item)
+        this.loadExternalSymbolicContent(item)
+        this.expandTree(item)
       } else if (fileType === 'txt') {
       // 如果是 TXT 文件，预览
         this.previewTextFile(item)
@@ -675,14 +680,13 @@ export default {
     },
     // 获取文件 URL
     getFileUrl(item) {
-      return `http://localhost:8080/api/v2/uofs/transmit/download/guid?guid=${item.guid}`
+      return `http://localhost:8080/api/v2/uofs/transmit/download/path?path=${this.concatenate() + '/' + item.name}`
     },
     listRoot() {
       axios.get('http://localhost:8080/api/v2/uofs/folder/list/root').then((rs) => {
         this.data = rs.data.data
         for (let i = 0; i < this.data.length; i++) {
           if (this.data[i].metaType === 'Folder') {
-            console.log('xxx')
             axios
               .get('http://localhost:8080/api/v2/uofs/folder/folder/listItem', {
                 params: {
@@ -726,6 +730,32 @@ export default {
           this.mainData = rs.data.data
           for (let i = 0; i < this.mainData.length; i++) {
             if (this.mainData[i].metaType === 'FileNode') {
+              const parts = this.mainData[i].name.split('.')
+              this.mainData[i].metaType = parts[parts.length - 1]
+            }
+          }
+        })
+    },
+    loadExternalSymbolicContent(item) {
+      let path = ''
+      for (let i = 0; i < this.currentPath.length; i++) {
+        if (i === 0) {
+          path = this.currentPath[i].name
+        } else {
+          path = path + '/' + this.currentPath[i].name
+        }
+      }
+      axios
+        .get('http://localhost:8080/api/v2/uofs/externalSymbolic/listItem', {
+          params: {
+            path: path
+          }
+        })
+        .then((rs) => {
+          item.children = rs.data.data
+          this.mainData = rs.data.data
+          for (let i = 0; i < this.mainData.length; i++) {
+            if (this.mainData[i].metaType === 'ExternalFile') {
               const parts = this.mainData[i].name.split('.')
               this.mainData[i].metaType = parts[parts.length - 1]
             }
@@ -802,7 +832,17 @@ export default {
           console.error('失败:', error)
         })
     },
-
+    concatenate() {
+      let path = ''
+      for (let i = 0; i < this.currentPath.length; i++) {
+        if (i === 0) {
+          path = this.currentPath[i].name
+        } else {
+          path = path + '/' + this.currentPath[i].name
+        }
+      }
+      return path
+    },
     // 打开属性抽屉
     attribute() {
       this.drawer = true
@@ -844,13 +884,15 @@ export default {
           }
         })
       } else {
+        let path = this.concatenate()
+        path = path + '/' + item.name
+        console.log(path)
         this.downloadProgressVisible = true // 显示进度条
         this.downloadProgress = 0 // 重置进度
-
         axios
-          .get('http://localhost:8080/api/v2/uofs/transmit/download/guid', {
+          .get('http://localhost:8080/api/v2/uofs/transmit/download/path', {
             params: {
-              guid: item.guid
+              path: path
             },
             responseType: 'blob',
             onDownloadProgress: (progressEvent) => {
