@@ -77,7 +77,7 @@ export const constantRoutes = [
     children: [
       {
         path: 'service',
-        component: () => import('@/views/service/index'),
+        component: () => import('@/views/spartas/service/index'),
         name: 'service',
         meta: { title: 'service', icon: 'service', affix: true }
       }
@@ -95,19 +95,19 @@ export const constantRoutes = [
     children: [
       {
         path: 'storage',
-        component: () => import('@/views/storage/index'),
+        component: () => import('@/views/spartas/storage/index'),
         name: '对象存储',
         meta: { title: 'storage' }
       },
       {
         path: 'file',
-        component: () => import('@/views/file/index'),
+        component: () => import('@/views/spartas/file/index'),
         name: 'file',
         meta: { title: 'file' }
       },
       {
         path: 'volume',
-        component: () => import('@/views/volume/index'),
+        component: () => import('@/views/spartas/volume/index'),
         name: 'volume',
         meta: { title: 'volume' }
         // children: [
@@ -127,13 +127,13 @@ export const constantRoutes = [
       },
       {
         path: 'physicsVolume',
-        component: () => import('@/views/volume/physicsVolume/index.vue'),
+        component: () => import('@/views/spartas/volume/physicsVolume/index.vue'),
         name: 'physicsVolumeManagement',
         meta: { title: 'physicsVolume' }
       },
       {
         path: 'cdn',
-        component: () => import('@/views/cdn/index'),
+        component: () => import('@/views/spartas/cdn/index'),
         name: 'cdn',
         meta: { title: 'cdn' }
       }
