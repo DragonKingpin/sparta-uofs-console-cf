@@ -99,6 +99,7 @@
             <!-- 如果是文件夹，展示文件夹图标 -->
             <i v-else-if="item.metaType === 'Folder'" class="el-icon-folder" />
             <i v-else-if="item.metaType === 'ExternalSymbolic'" class="el-icon-folder" />
+            <i v-else-if="item.metaType === 'ExternalFolder'" class="el-icon-folder" />
             <!-- 如果是视频文件，展示视频图标 -->
             <i v-else-if="['mp4', 'avi', 'mov', 'mkv'].includes(getFileType(item.name))" class="el-icon-video-camera" />
             <!-- 如果是音频文件，展示音频图标 -->
@@ -410,11 +411,13 @@ export default {
       if (index === -1) {
         this.listRoot() // 直接返回根目录
         this.currentPath = []
+        localStorage.removeItem('currentPath')
       } else {
         this.currentPath = this.currentPath.slice(0, index + 1) // 截取路径
         const targetFolder = this.currentPath[index] // 获取目标文件夹
         this.loadFolderContent(targetFolder) // 加载该文件夹的内容
       }
+      this.saveCurrentPath()
     },
     previewPptxFile(item) {
       this.pptUrl = this.getFileUrl(item)
@@ -574,6 +577,10 @@ export default {
         this.currentPath.push(item)
         this.loadExternalSymbolicContent(item)
         this.expandTree(item)
+      } else if (item.metaType === 'ExternalFolder') {
+        this.currentPath.push(item)
+        this.loadExternalFolderContent(item)
+        this.expandTree(item)
       } else if (fileType === 'txt') {
       // 如果是 TXT 文件，预览
         this.previewTextFile(item)
@@ -598,6 +605,7 @@ export default {
       // 如果是 PPTX 文件，预览
         this.previewPptxFile(item)
       }
+      this.saveCurrentPath()
     },
     previewPdfFile(item) {
       const pdfUrl = this.getFileUrl(item) // 获取 PDF 文件的 URL
@@ -699,6 +707,8 @@ export default {
         }
         this.mainData = rs.data.data
         this.currentPath = [] // 重置路径
+        this.restoreCurrentPath()
+        this.switchView(localStorage.getItem('viewMode'))
         console.log(this.data)
       })
     },
@@ -714,27 +724,34 @@ export default {
           // 返回到根目录
           this.listRoot()
         }
+        this.saveCurrentPath()
       }
     },
 
     // 加载文件夹内容
     loadFolderContent(folder) {
-      axios
-        .get('http://localhost:8080/api/v2/uofs/folder/folder/listItem', {
-          params: {
-            folderGuid: folder.guid
-          }
-        })
-        .then((rs) => {
-          folder.children = rs.data.data
-          this.mainData = rs.data.data
-          for (let i = 0; i < this.mainData.length; i++) {
-            if (this.mainData[i].metaType === 'FileNode') {
-              const parts = this.mainData[i].name.split('.')
-              this.mainData[i].metaType = parts[parts.length - 1]
+      if (folder.metaType === 'Folder') {
+        axios
+          .get('http://localhost:8080/api/v2/uofs/folder/folder/listItem', {
+            params: {
+              folderGuid: folder.guid
             }
-          }
-        })
+          })
+          .then((rs) => {
+            folder.children = rs.data.data
+            this.mainData = rs.data.data
+            for (let i = 0; i < this.mainData.length; i++) {
+              if (this.mainData[i].metaType === 'FileNode') {
+                const parts = this.mainData[i].name.split('.')
+                this.mainData[i].metaType = parts[parts.length - 1]
+              }
+            }
+          })
+      } else if (folder.metaType === 'ExternalSymbolic') {
+        this.loadExternalSymbolicContent(folder)
+      } else if (folder.metaType === 'ExternalFolder') {
+        this.loadExternalFolderContent(folder)
+      }
     },
     loadExternalSymbolicContent(item) {
       let path = ''
@@ -761,6 +778,36 @@ export default {
             }
           }
         })
+    },
+    loadExternalFolderContent(item) {
+      axios
+        .get('http://localhost:8080/api/v2/uofs/externalSymbolic/listItem/externalFoldr', {
+          params: {
+            path: item.path
+          }
+        })
+        .then((rs) => {
+          item.children = rs.data.data
+          this.mainData = rs.data.data
+          for (let i = 0; i < this.mainData.length; i++) {
+            if (this.mainData[i].metaType === 'ExternalFile') {
+              const parts = this.mainData[i].name.split('.')
+              this.mainData[i].metaType = parts[parts.length - 1]
+            }
+          }
+        })
+    },
+    restoreCurrentPath() {
+      const savedPath = localStorage.getItem('currentPath')
+      if (savedPath) {
+        this.currentPath = JSON.parse(savedPath)
+        console.log(this.currentPath)
+        if (this.currentPath.length > 0) {
+          const lastFolder = this.currentPath[this.currentPath.length - 1]
+          this.loadFolderContent(lastFolder)
+          this.expandTree(lastFolder)
+        }
+      }
     },
 
     // 展开左侧文件树到对应节点
@@ -912,6 +959,12 @@ export default {
       }
       this.contextMenuVisible = false
     },
+    saveCurrentPath() {
+      localStorage.setItem('currentPath', JSON.stringify(this.currentPath))
+    },
+    saveViewMode() {
+      localStorage.setItem('viewMode', this.viewMode)
+    },
 
     // 离线下载
     offlineDownload() {
@@ -921,6 +974,7 @@ export default {
     // 切换视图模式
     switchView(mode) {
       this.viewMode = mode
+      this.saveViewMode()
     }
   }
 }
