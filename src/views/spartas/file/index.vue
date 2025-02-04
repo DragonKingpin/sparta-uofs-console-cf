@@ -155,9 +155,11 @@
         @mousedown.stop
       >
         <ul>
-          <li @click="removeFile"><i class="el-icon-delete" /> 删除</li>
+          <li @click="removeFile(currentFile)"><i class="el-icon-delete" /> 删除</li>
           <li @click="attribute"><i class="el-icon-document" /> 属性</li>
           <li @click="downloadFile(currentFile)"><i class="el-icon-download" /> 下载</li>
+          <li @click="setOperationNode(currentFile)"><i class="el-icon-document-copy" /> 复制</li>
+          <li v-if="operationNode" @click="paste"><i class="el-icon-document-add" /> 粘贴</li>
         </ul>
       </div>
     </transition>
@@ -393,7 +395,8 @@ export default {
       createFolderDialogVisible: false, // 新建文件夹弹窗显示状态
       createFolderForm: {
         folderName: '' // 用户输入的文件夹名称
-      }
+      },
+      operationNode: null
     }
   },
   mounted() {
@@ -466,33 +469,56 @@ export default {
     // 处理文件上传
     uploadFile(file) {
       const formData = new FormData()
+      const item = this.currentPath[this.currentPath.length - 1]
+      if (item.metaType === 'Folder') {
+        // 获取当前路径
+        const currentPath = this.getCurrentPath()
 
-      // 获取当前路径
-      const currentPath = this.getCurrentPath()
+        // 生成完整路径（当前路径 + 文件名）
+        const filePath = currentPath ? `${currentPath}/${file.name}` : file.name
 
-      // 生成完整路径（当前路径 + 文件名）
-      const filePath = currentPath ? `${currentPath}/${file.name}` : file.name
-
-      // 添加文件路径和文件到 FormData
-      formData.append('filePath', filePath) // 文件路径
-      formData.append('file', file) // 文件
-
-      // 调用后端接口上传文件
-      axios
-        .post('http://localhost:8080/api/v2/uofs/transmit/upload', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data' // 必须设置 Content-Type
-          }
-        })
-        .then((response) => {
-          this.$message.success('文件上传成功')
-          // 上传成功后刷新当前文件夹内容
-          this.loadFolderContent(this.currentPath[this.currentPath.length - 1])
-        })
-        .catch((error) => {
-          this.$message.error('文件上传失败')
-          console.error('上传失败:', error)
-        })
+        // 添加文件路径和文件到 FormData
+        formData.append('filePath', filePath) // 文件路径
+        formData.append('file', file) // 文件
+        // 调用后端接口上传文件
+        axios
+          .post('http://localhost:8080/api/v2/uofs/transmit/upload', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data' // 必须设置 Content-Type
+            }
+          })
+          .then((response) => {
+            this.$message.success('文件上传成功')
+            // 上传成功后刷新当前文件夹内容
+            this.loadFolderContent(this.currentPath[this.currentPath.length - 1])
+          })
+          .catch((error) => {
+            this.$message.error('文件上传失败')
+            console.error('上传失败:', error)
+          })
+      } else {
+        const currentPath = this.getCurrentPath()
+        formData.append('sourcePath', currentPath) // 文件路径
+        formData.append('file', file) // 文件
+        axios
+          .post('http://localhost:8080/api/v2/uofs/externalSymbolic/directUpload', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data' // 必须设置 Content-Type
+            }
+          })
+          .then((response) => {
+            this.$message.success('文件上传成功')
+            if (item.metaType === 'ExternalSymbolic') {
+              this.loadExternalSymbolicContent(item)
+            } else if (item.metaType === 'ExternalFolder') {
+              this.loadExternalFolderContent(item)
+            }
+          })
+          .catch((error) => {
+            this.$message.error('文件上传失败')
+            console.error('上传失败:', error)
+          })
+      }
     },
 
     // 处理拖放文件上传
@@ -582,7 +608,7 @@ export default {
         this.loadExternalFolderContent(item)
         this.expandTree(item)
       } else if (fileType === 'txt') {
-      // 如果是 TXT 文件，预览
+        // 如果是 TXT 文件，预览
         this.previewTextFile(item)
       } else if (['mp4', 'avi', 'mov', 'mkv'].includes(fileType)) {
         // 如果是视频文件，预览
@@ -602,7 +628,7 @@ export default {
       } else if (['xls', 'xlsx'].includes(fileType)) {
         this.previewExcelFile(item) // 预览 Excel 文件
       } else if (['ppt', 'pptx'].includes(fileType)) {
-      // 如果是 PPTX 文件，预览
+        // 如果是 PPTX 文件，预览
         this.previewPptxFile(item)
       }
       this.saveCurrentPath()
@@ -612,7 +638,7 @@ export default {
       this.pdfPreviewDialogVisible = true // 打开预览弹窗
 
       this.$nextTick(() => {
-      // 将 PDF 文件嵌入到容器中
+        // 将 PDF 文件嵌入到容器中
         PDFObject.embed(pdfUrl, '#pdf-preview-container', {
           height: '600px',
           width: '100%'
@@ -738,7 +764,11 @@ export default {
             }
           })
           .then((rs) => {
+            for (let i = 0; i < rs.data.data.length; i++) {
+              rs.data.data[i].parent = folder
+            }
             folder.children = rs.data.data
+            console.log(folder.children)
             this.mainData = rs.data.data
             for (let i = 0; i < this.mainData.length; i++) {
               if (this.mainData[i].metaType === 'FileNode') {
@@ -769,6 +799,9 @@ export default {
           }
         })
         .then((rs) => {
+          for (let i = 0; i < rs.data.data.length; i++) {
+            rs.data.data[i].parent = item
+          }
           item.children = rs.data.data
           this.mainData = rs.data.data
           for (let i = 0; i < this.mainData.length; i++) {
@@ -787,6 +820,9 @@ export default {
           }
         })
         .then((rs) => {
+          for (let i = 0; i < rs.data.data.length; i++) {
+            rs.data.data[i].parent = item
+          }
           item.children = rs.data.data
           this.mainData = rs.data.data
           for (let i = 0; i < this.mainData.length; i++) {
@@ -796,6 +832,17 @@ export default {
             }
           }
         })
+    },
+    refactorPath(item) {
+      this.currentPath = []
+
+      const path = []
+      while (item) {
+        path.unshift(item)
+        item = item.parent
+      }
+
+      this.currentPath = path
     },
     restoreCurrentPath() {
       const savedPath = localStorage.getItem('currentPath')
@@ -818,9 +865,13 @@ export default {
 
     // 点击树节点
     handleNodeClick(node) {
-      if (node.metaType === 'Folder' && node.children === null) {
-        this.currentPath.push(node) // 添加到路径
+      if (node.metaType === 'Folder') {
+        this.refactorPath(node)
         this.loadFolderContent(node)
+      }
+      if (node.metaType === 'ExternalSymbolic') {
+        this.refactorPath(node)
+        this.loadExternalSymbolicContent(node)
       }
       if (node.children != null) {
         this.mainData = node.children
@@ -864,20 +915,69 @@ export default {
     },
 
     // 删除文件
-    removeFile() {
-      axios
-        .delete('http://localhost:8080/api/v2/uofs/folder/remove/file', {
-          params: {
-            fileGuid: this.currentFile.guid
-          }
-        })
-        .then((response) => {
-          console.log('成功:', response.data)
-          this.refreshFileList() // 刷新文件列表
-        })
-        .catch((error) => {
-          console.error('失败:', error)
-        })
+    removeFile(item) {
+      if (item.metaType === 'Folder') {
+        axios
+          .delete('http://localhost:8080/api/v2/uofs/folder/remove/file', {
+            params: {
+              fileGuid: this.currentFile.guid
+            }
+          })
+          .then((response) => {
+            console.log('成功:', response.data)
+            const currentFolder = this.currentPath.length > 0 ? this.currentPath[this.currentPath.length - 1] : null
+            if (currentFolder) {
+              this.loadFolderContent(currentFolder) // 重新加载当前文件夹内容
+            } else {
+              this.listRoot() // 如果当前在根目录，重新加载根目录
+            }
+            this.contextMenuVisible = false
+          })
+          .catch((error) => {
+            console.error('失败:', error)
+          })
+      } else if (item.guid === null || item.metaType === 'ExternalSymbolic') {
+        const path = this.getCurrentPath() + '/' + item.name
+        axios
+          .delete('http://localhost:8080/api/v2/uofs/externalSymbolic/remove', {
+            params: {
+              path: path
+            }
+          })
+          .then((response) => {
+            console.log('成功:', response.data)
+            const currentFolder = this.currentPath.length > 0 ? this.currentPath[this.currentPath.length - 1] : null
+            if (currentFolder) {
+              this.loadFolderContent(currentFolder) // 重新加载当前文件夹内容
+            } else {
+              this.listRoot() // 如果当前在根目录，重新加载根目录
+            }
+            this.contextMenuVisible = false
+          })
+          .catch((error) => {
+            console.error('失败:', error)
+          })
+      } else {
+        axios
+          .delete('http://localhost:8080/api/v2/uofs/bucket/remove/file', {
+            params: {
+              fileGuid: this.currentFile.guid
+            }
+          })
+          .then((response) => {
+            console.log('成功:', response.data)
+            const currentFolder = this.currentPath.length > 0 ? this.currentPath[this.currentPath.length - 1] : null
+            if (currentFolder) {
+              this.loadFolderContent(currentFolder) // 重新加载当前文件夹内容
+            } else {
+              this.listRoot() // 如果当前在根目录，重新加载根目录
+            }
+            this.contextMenuVisible = false
+          })
+          .catch((error) => {
+            console.error('失败:', error)
+          })
+      }
     },
     concatenate() {
       let path = ''
@@ -965,7 +1065,42 @@ export default {
     saveViewMode() {
       localStorage.setItem('viewMode', this.viewMode)
     },
+    setOperationNode(item) {
+      if (item.metaType !== 'ExternalSymbolic' && item.metaType !== 'ExternalFolder' && item.metaType !== 'ExternalFile' && item.guid !== null) {
+        item.path = this.getCurrentPath() + '/' + item.name
+      }
+      if (item.metaType === 'ExternalSymbolic') {
+        item.path = item.reparsedPoint
+      }
+      this.operationNode = item
+      console.log(this.operationNode)
+      this.contextMenuVisible = false
+    },
+    paste() {
+      const path = this.concatenate()
+      console.log(path + '....' + this.operationNode.path)
+      if (this.currentPath[this.currentPath.length - 1].metaType === 'Folder') {
+        axios.put('http://localhost:8080/api/v2/uofs/folder/copy', {}, {
+          params: {
+            sourcePath: path,
+            destinationPath: this.operationNode.path
+          }
+        }).then((rs) => {
+          this.loadFolderContent(this.currentFile)
+        })
+      } else {
+        axios.put('http://localhost:8080/api/v2/uofs/externalSymbolic/copy', {}, {
+          params: {
+            sourcePath: path,
+            destinationPath: this.operationNode.path
+          }
+        }).then((rs) => {
+          this.loadFolderContent(this.currentFile)
+        })
+      }
 
+      this.contextMenuVisible = false
+    },
     // 离线下载
     offlineDownload() {
       // 离线下载逻辑
